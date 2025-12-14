@@ -1,0 +1,52 @@
+from libraries.init_UI import init_UI
+from libraries.user_interface import UserInterface
+
+if __name__ == "__main__":
+    
+    """Main code"""
+    
+    init_form = init_UI("Simulation Initialization") #Starts form
+    if not init_form.closed: #If form wasn't closed starts simulation
+        ui=UserInterface("Cosmological Billard Simulation",init_form.parameters)
+        
+#TODO   
+    #Clase SimulationCore
+        #Error de division de tiempo en update(en x1 actualiza a 1s pero debería tener mas resolución para mayor fluidez)(gpt)
+        #3Mirar porque alomejor los muros en dimensiones altas no estan siendo adecuadamente intersectados (en 3D hay los justos porque los muros son lineas en 3D)(mano)
+        #Modificar la metrica de DeWitt para añadir el término de dilaton.(Mano)
+        #Adaptar time control para que no explote cuando se reinicia el tiempo o cuando se cambia vel(Gpt)
+    #clase init_UI  
+        #Load Simulation
+        #Muros de simetria opcionales
+    #clase SimConfig    
+        #File:
+            #Save Simulation as...
+            #Load Simulation
+        #Edit
+            #Add Slice
+            #Add Simulation
+            #Delete Simulation
+            #Modify Simulation conditions
+            #Modify Slice contditions
+            #Change Position
+            #Change Velocity
+            #Change Matter Content
+        #Export
+            #Export Simulation data as (.csv,.txt)
+            #Export video(.mp4)
+        #Simulate
+            #Caos Simulation 
+        #View
+            #View SimInfo pannel
+            #View spacial curvature
+            #View particle stela
+            #View Weyl Chamber zone
+    #Clase hyperbolic space
+        #Reordenar clases y metodos
+            #Sacar vectors_are_base, base_vects de geodesic subspace y ponerlo en Metric vector space
+            #Clase  MetricVectorSpace
+                #Graham-Schmidt,plane eq to vectors, projections, base, etc.
+            #Classe EuclideanSpace,Minkowski,DeWitt
+            #Clase euclidean norm como embeding 
+                #euclidean norm, inprod,base vect
+    #Crear ejecutable .exe para reducir riesgo de error.
