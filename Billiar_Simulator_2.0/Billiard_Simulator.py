@@ -10,20 +10,20 @@ if __name__ == "__main__":
         ui=UserInterface("Cosmological Billard Simulation",init_form.parameters)
         
 #TODO   
-    #Clase SimulationCore
-        #Error de division de tiempo en update(en x1 actualiza a 1s pero debería tener mas resolución para mayor fluidez)(gpt)
-        #3Mirar porque alomejor los muros en dimensiones altas no estan siendo adecuadamente intersectados (en 3D hay los justos porque los muros son lineas en 3D)(mano)
-        #Modificar la metrica de DeWitt para añadir el término de dilaton.(Mano)
-        #Adaptar time control para que no explote cuando se reinicia el tiempo o cuando se cambia vel(Gpt)
+    #Clase Graphic
+        #Etiquetas dinamicas de los graficos
     #clase init_UI  
+        #Opciones de visualización del billar.(Canonica, plano de geodesica comovil, plano geodesica comovil inicial)
+        #Opciones de parametrización del eje de kasner
+        #Opciones de visualizar/no visualizar ciertos graficos
         #Load Simulation
-        #Muros de simetria opcionales
     #clase SimConfig    
         #File:
             #Save Simulation as...
             #Load Simulation
         #Edit
             #Add Slice
+            #Add 3D Slice
             #Add Simulation
             #Delete Simulation
             #Modify Simulation conditions
@@ -31,22 +31,17 @@ if __name__ == "__main__":
             #Change Position
             #Change Velocity
             #Change Matter Content
+            #Set/Unset symetry walls
         #Export
             #Export Simulation data as (.csv,.txt)
             #Export video(.mp4)
-        #Simulate
-            #Caos Simulation 
         #View
             #View SimInfo pannel
             #View spacial curvature
             #View particle stela
             #View Weyl Chamber zone
-    #Clase hyperbolic space
-        #Reordenar clases y metodos
-            #Sacar vectors_are_base, base_vects de geodesic subspace y ponerlo en Metric vector space
-            #Clase  MetricVectorSpace
-                #Graham-Schmidt,plane eq to vectors, projections, base, etc.
-            #Classe EuclideanSpace,Minkowski,DeWitt
-            #Clase euclidean norm como embeding 
-                #euclidean norm, inprod,base vect
+            #View all walls/just dominant
+            #View probability density in slice
+            #Change slice plane recalibration at bounce
     #Crear ejecutable .exe para reducir riesgo de error.
+    #Comentar codigo

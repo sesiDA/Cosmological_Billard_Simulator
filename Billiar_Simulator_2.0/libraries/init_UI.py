@@ -9,7 +9,7 @@ class init_UI():
 
     def __init__(self,title):
         #Sets window and configurates it
-        self.w,self.h=600,400
+        self.w,self.h=700,500
         
         #Sets internal state variables
         self.closed=False
@@ -19,27 +19,44 @@ class init_UI():
         self.form_dilaton_check = None
         self.form_pforms_check = None
         
-        p1=-1/np.pi
+        u = 1/np.pi # approx 0.3183
+        p1=1/np.pi
         p2=1/np.e
-        
-        S=1-p1-p2
-        Q=1-p1**2-p2**2
-        D=np.sqrt(2*Q-S**2)
-        p3=(S+D)/2
-        p4=(S-D)/2
-    
+        def get_kasner_param_3d(u):
+            
+            denom = 1 + u + u**2
+            p1 = -u / denom
+            p2 = (1 + u) / denom
+            p3 = (u * (1 + u)) / denom
+            return [p1,p2,p3]
+            
+        def get_kasner_param_4d(p1,p2):
+            sum_remaining = 1.0 - (p1 + p2)
+            sq_sum_remaining = 1.0 - (p1**2 + p2**2)
+            a = 2.0
+            b = -2.0 * sum_remaining
+            c = sum_remaining**2 - sq_sum_remaining
+            discriminante = b**2 - 4*a*c
+            sqrt_disc = np.sqrt(discriminante)
+            p3 = (-b + sqrt_disc) / (2*a)
+            p4 = (-b - sqrt_disc) / (2*a)
+            return [p1,p2,p3,p4]
+        vect10D=[1,0,0,0,0,0,0,0,0,0,0]
         # Ordenamos para mantener consistencia con la cámara de Weyl estándar (p1 < p2 < p3)
         # Aunque la fórmula de u ya suele dar p1 negativo.
-        vals =sorted([p1, p2, p3,p4])
+        vals =sorted(get_kasner_param_4d(p1,p2))
+        #vals=vect10D
+        #vals=[0,1]
         self.parameters={"Initial Kasner Exp":vals,
-                         "Initial Beta Pos":[1,3,4,5],
+                         "Initial Beta Pos":[10,11,12,13,14,15,16,17,18],
                          "Initial Time":0.0,
                          "Time Speed":1.0,
                          "Dilaton":False,
                          "Kasner Dilaton Exp":0.0,
                          "Coupling Constants":[2,2],
                          "P-Forms":False,
-                         "P-Form List":[1,2]}
+                         "P-Form List":[1,2],
+                         "Homogeneous Model": False}
         self.type_to_functions={"<class 'int'>":    lambda x:int(x),
                                 "<class 'float'>":  lambda x:float(eval(str(x))),
                                 "<class 'list'>":   lambda x:eval(x),
@@ -89,6 +106,8 @@ class init_UI():
         parameters_type=[]
         for key in self.parameters.keys():
             parameters_type.append(type(self.parameters[key]))
+            if key == "Homogeneous Model": 
+                continue
             if key=="Initial Kasner Exp":
                 self.parameters[key]=f"{vals}"
             if (key in keys_to_exclude) or isinstance(self.parameters[key], bool):
@@ -123,8 +142,12 @@ class init_UI():
         btn_frame = tk.Frame(self.root, width=self.w, height=self.h/5)
         btn_frame.pack()
         #Start Button 
+        f_homo = Form(btn_frame, "Homogeneous Model", entry_type="bool")
+        f_homo.pack(side="top", pady=(5, 5))
+        self.forms["Homogeneous Model"] = f_homo
+        
         start_button = tk.Button(btn_frame, text="Start", font=("Arial", 14),command=self.form_is_correct)
-        start_button.place(relx=0.5, rely=0.5, anchor="center")
+        start_button.pack(side="top", pady=(0, 10))
 
         self.root.mainloop()
     def update_dynamic_fields(self):
@@ -166,6 +189,71 @@ class init_UI():
                 spatial_kasner = list(spatial_kasner) + [phi_exp]
             #Rewrites original parameter
             self.parameters["Initial Kasner Exp"] = spatial_kasner
+    def _validate_position_against_walls(self, beta, spatial_dim, is_dilaton, p_forms_on):
+        """
+        Verifica si la posición 'beta' cumple las desigualdades de todos los muros activos.
+        Devuelve (True, "") si es válida, o (False, "Mensaje de Error") si falla.
+        """
+        total_dim = len(beta)
+        dil_idx = total_dim - 1 if is_dilaton else -1
+        
+        # 1. Muros de Simetría (Ordenamiento: b0 < b1 < ... < bn)
+        # Esto define la cámara de Weyl gravitatoria básica.
+        # Si quieres libertad TOTAL (incluso fuera de la cámara fundamental gravitatoria),
+        # puedes comentar este bloque. Pero BKL asume esto habitualmente.
+        for i in range(spatial_dim - 1):
+            # Condición: beta[i+1] - beta[i] > 0
+            if beta[i+1] <= beta[i]:
+                return False, f"Symmetry Violation: beta[{i}] must be < beta[{i+1}] (Basic Weyl Chamber)."
+
+        # 2. Muro Gravitatorio Dominante (2*b0 + sum(others) > 0)
+        # Solo verificamos el muro más restrictivo cerca de la singularidad
+        val_grav = 2.0 * beta[0]
+        for k in range(1, spatial_dim):
+            val_grav += beta[k]
+        
+        if val_grav <= 0:
+            return False, "Gravity Wall Violation: Point is not in the physical Time-like region."
+
+        # 3. Muros de P-Formas (La parte crítica)
+        if p_forms_on:
+            try:
+                # Recuperamos los datos crudos del formulario
+                raw_p_list = self.forms["P-Form List"].get()
+                raw_couplings = self.forms["Coupling Constants"].get()
+                
+                p_list = list(eval(raw_p_list))
+                couplings = eval(raw_couplings)
+                if isinstance(couplings, (int, float)): couplings = [couplings]
+                
+                for i, p in enumerate(p_list):
+                    coupling = couplings[i] if i < len(couplings) else couplings[-1]
+                    
+                    # --- Muro Eléctrico ---
+                    # Desigualdad: Sum(beta_0...beta_p-1) - 0.5 * C * phi > 0
+                    if p <= spatial_dim:
+                        wall_val = sum(beta[k] for k in range(p))
+                        if is_dilaton:
+                            wall_val -= 0.5 * coupling * beta[dil_idx]
+                        
+                        if wall_val <= 0:
+                            return False, f"Electric {p}-Form Wall Violation. (Try increasing betas or adjusting dilaton)."
+
+                    # --- Muro Magnético ---
+                    # Desigualdad: Sum(beta_0...beta_q-1) + 0.5 * C * phi > 0
+                    p_magn = spatial_dim - p - 2
+                    if p_magn > 0:
+                        wall_val = sum(beta[k] for k in range(p_magn))
+                        if is_dilaton:
+                            wall_val += 0.5 * coupling * beta[dil_idx]
+                            
+                        if wall_val <= 0:
+                            return False, f"Magnetic {p}-Form (dual {p_magn}) Wall Violation."
+                            
+            except Exception as e:
+                return False, f"Error validating P-Forms: {e}"
+
+        return True, ""
     def form_is_correct(self):
     
         """Checks if init form is correct."""
@@ -208,31 +296,49 @@ class init_UI():
                 elif i == 1:
                     beta = np.array(converted_val, dtype=np.float64)
                     
-                    # Timelike condition (in DeWitt metric) Sum(x^2) - (Sum(x))^2 < 0
-                    dewitt_norm = np.sum(beta**2) - (np.sum(beta)**2)
-                    if not dewitt_norm < 0:
-                        incorrect_message = "Initial Pos: Must be Timelike in DeWitt metric."
-                    
-                    #Weyl Chamber condition b0 < b1 < b2 ...
-                    elif np.any(np.diff(beta) <= 0):
-                        incorrect_message = "Initial Pos: Betas must be strictly ordered (b0 < b1...)."
-                    
-                    #Gravitational condition 
-                    elif beta[0] <= 0:
-                        incorrect_message = "Initial Pos: Smallest beta must be positive (> 0)."
-
-                    #Dimensional consistency with Kasner exponents
+                    # --- Preparación de Datos ---
                     try:
                         kasner_raw = self.forms["Initial Kasner Exp"].get()
-                        kasner_dim = len(list(eval(kasner_raw)))
-                        if self.forms["Dilaton"].get():
-                            if len(beta) != kasner_dim+1:
-                                incorrect_message = f"With Dilaton, Beta Pos must have {kasner_dim + 1} dimensions (Space + Phi)."
-                        else:
-                            if len(beta) != kasner_dim:
-                                incorrect_message = "Dimensions mismatch between Kasner and Beta."
-                    except: pass 
+                        kasner_dim = len(list(eval(kasner_raw))) # Dimensión espacial
+                        is_dilaton = self.forms["Dilaton"].get()
+                        is_pforms = self.forms["P-Forms"].get()
+                        
+                        expected_dim = kasner_dim + (1 if is_dilaton else 0)
+                    except:
+                        incorrect_message = "Invalid Kasner Exponents format."
+                        break
 
+                    # 1. Chequeo de Dimensión
+                    if len(beta) != expected_dim:
+                        incorrect_message = f"Beta Pos dimension mismatch. Expected {expected_dim} (Space + Dilaton)."
+                    
+                    # 2. Chequeo Timelike (Métrica de DeWitt)
+                    # Sum(b^2) - (Sum(b))^2 < 0. Esto sigue siendo necesario para que exista proyección hiperbólica.
+                    # IMPORTANTE: Calcula esto con la métrica SIN normalización extra primero, o usa la fórmula genérica.
+                    # La fórmula genérica para G_ij = delta - 1 es: sum(x^2) - sum(x)^2.
+                    # Si tienes dilaton, la métrica es diferente. 
+                    # Para simplificar, usamos la condición Lorentziana básica del espacio de configuración.
+                    else:
+                        # Calculamos métrica aproximada para validar Lorentziano
+                        sq_norm = np.sum(beta**2)
+                        if is_dilaton:
+                            # Asumimos que el input está normalizado para G_phi=1 o 2
+                            # Si no estamos seguros, relajamos este check o usamos una cota laxa
+                            sq_norm_grav = np.sum(beta[:-1]**2)
+                            linear_grav = np.sum(beta[:-1])**2
+                            # Check gravitatorio parcial
+                            if (sq_norm_grav - linear_grav) > 0:
+                                # Esto es solo una advertencia, no bloqueante si no quieres
+                                pass 
+                        else:
+                            if (sq_norm - np.sum(beta)**2) >= 0:
+                                incorrect_message = "Position must be Timelike (inside Light Cone)."
+
+                    # 3. VALIDACIÓN DINÁMICA DE MUROS (Aquí ocurre la magia)
+                    if incorrect_message == "":
+                        is_valid, msg = self._validate_position_against_walls(beta, kasner_dim, is_dilaton, is_pforms)
+                        if not is_valid:
+                            incorrect_message = msg
                 #Initial time (i=2)
                 elif i == 2 and converted_val < 0:
                     incorrect_message = "Initial time must be >= 0."
@@ -252,7 +358,7 @@ class init_UI():
                     try:#Looks for equal dimension of vectors coupling constant and p-forms list
                         couplings = eval(self.forms["Coupling Constants"].get())
                         if isinstance(couplings, (int, float)): couplings = [couplings] 
-                        if len(converted_val) != len(couplings):
+                        if self.forms["Dilaton"].get() and len(converted_val) != len(couplings):
                             incorrect_message = "Length of 'P-Form List' must match 'Coupling Constants'."
                     except:
                         incorrect_message = "Invalid format in Coupling Constants List."
