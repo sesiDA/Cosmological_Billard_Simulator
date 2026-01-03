@@ -452,7 +452,7 @@ class GraphicDisplay(Graphic):
                                bbox_to_anchor=(1.02, 1), 
                                fontsize='small', 
                                frameon=False,
-                               title="Walls")
+                               title="Legend")
                 self.fig.tight_layout(rect=[0, 0, 0.85, 1])
         else:
             self.btn_amplify.config(text="□")

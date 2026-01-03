@@ -44,7 +44,7 @@ class init_UI():
         vect10D=[1,0,0,0,0,0,0,0,0,0,0]
         # Ordenamos para mantener consistencia con la cámara de Weyl estándar (p1 < p2 < p3)
         # Aunque la fórmula de u ya suele dar p1 negativo.
-        vals =sorted(get_kasner_param_4d(p1,p2))
+        vals =sorted(get_kasner_param_3d(u))
         #vals=vect10D
         #vals=[0,1]
         self.parameters={"Initial Kasner Exp":vals,
