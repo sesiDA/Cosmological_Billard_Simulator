@@ -798,17 +798,55 @@ class CoxeterGroup:
         self.walls = walls
         self.space = de_witt_space
         self.n_walls = len(walls)
+        
+        # Dimensiones
+        # Nota: La dimensión del billar hiperbólico es (dim_espacio_config - 1)
+        self.billiard_dim = self.space.dim  # d en DeWitt (dimensión de las betas)
+        
+        # 1. Detectar si es un Simplex
+        # Un simplex en H^n tiene n+1 caras. 
+        # Aquí self.space.dim es la dimensión de las betas (ej. 3 para 4D).
+        # El espacio hiperbólico tiene dim = 2. Un triangulo tiene 3 caras.
+        # Por tanto, es simplex si n_walls == billiard_dim.
+        self.is_simplex = (self.n_walls == self.billiard_dim)
+        print(f"Simplex:{self.is_simplex}")
         self.cartan_matrix = self._calculate_cartan()
-        self.eigenvalues = np.linalg.eigvals(self.cartan_matrix)
-        self.determinant = np.linalg.det(self.cartan_matrix)
-        self.is_lorentzian = (np.sum(self.eigenvalues < -1e-9) == 1)
-        if self.is_lorentzian:
-            self.volume_finity = self._check_finite_volume()
+        
+        # Inicializar variables de finitud
+        self.eigenvalues = np.array([])
+        self.determinant = 0.0
+        self.is_lorentzian = False
+        
+        if self.is_simplex:
+            # --- MÉTODO 1: Criterio Espectral (Vinberg) para Simplices ---
+            self.eigenvalues = np.linalg.eigvals(self.cartan_matrix)
+            self.determinant = np.linalg.det(self.cartan_matrix)
+            # En la convención BKL, firma Lorentziana implica un autovalor negativo
+            self.is_lorentzian = (np.sum(self.eigenvalues < -1e-9) == 1)
+            
+            if self.is_lorentzian:
+                self.volume_finity = self._check_finite_volume_simplex()
+            else:
+                self.volume_finity = False
         else:
-            self.volume_finity = False
+            # --- MÉTODO 2: Criterio Geométrico para Poliedros Generales ---
+            # No usamos autovalores de Cartan global (matriz sobredimensionada)
+            self.volume_finity = self._check_finite_volume_polyhedron()
+            self.is_lorentzian = True # Asumimos geometría Lorentziana base
+
         self.singular_vertices_list = []
         if not self.volume_finity:
             self.singular_vertices_list = self._find_singular_vertices()
+    
+    def _calculate_cartan(self):
+        N = np.array([w.normal for w in self.walls])
+        # Producto escalar en métrica DeWitt (Lorentziana)
+        Gram = N @ self.space.g_inv @ N.T
+        diag = np.diag(Gram)
+        with np.errstate(divide='ignore', invalid='ignore'):
+            A = 2 * Gram / diag[:, None]
+        A[np.isnan(A)] = 0
+        return np.rint(A).astype(int)
     
     def _calculate_cartan(self):
         N = np.array([w.normal for w in self.walls])
@@ -818,11 +856,84 @@ class CoxeterGroup:
             A = 2 * Gram / diag[:, None]
         A[np.isnan(A)] = 0
         return np.rint(A).astype(int)
-    def _check_finite_volume(self):
+    def _check_finite_volume_simplex(self):
+        """Método clásico de Vinberg: quitar un nodo y chequear si el subgrafo es finito/afín."""
         for k in range(self.n_walls):
             sub_A = np.delete(np.delete(self.cartan_matrix, k, 0), k, 1)
-            if np.any(np.linalg.eigvals(sub_A) < -1e-9): return False
+            # Si el subgrafo tiene autovalores negativos, es Indefinido -> No cierra el volumen
+            if np.any(np.linalg.eigvals(sub_A) < -1e-7): return False
         return True
+    def _check_finite_volume_polyhedron(self):
+        """
+        Criterio Geométrico General (Corregido):
+        El volumen es finito si TODOS los vértices físicos del poliedro están 
+        dentro del cono de luz (Time-like) o en el borde (Light-like).
+        """
+        # Dimensión necesaria para formar un vértice (intersección de d-1 planos)
+        required_walls = self.billiard_dim - 1 
+        
+        if self.n_walls < required_walls: return False
+
+        valid_vertex_found = False
+        has_ultra_ideal = False
+
+        # Iterar todas las combinaciones posibles que formen un vértice
+        for indices in itertools.combinations(range(self.n_walls), required_walls):
+            subset_normals = np.array([self.walls[i].normal for i in indices])
+            
+            try:
+                # SVD para hallar el vector director v (Null space)
+                _, _, Vh = np.linalg.svd(subset_normals)
+                v = Vh[-1]
+            except np.linalg.LinAlgError:
+                continue
+
+            # --- CORRECCIÓN CRÍTICA ---
+            # Chequeo de orientación (probar v y -v)
+            # Usamos producto punto directo (n_i * v^i) SIN MÉTRICA.
+            
+            other_indices = [i for i in range(self.n_walls) if i not in indices]
+            if not other_indices: 
+                pass 
+            else:
+                other_normals = np.array([self.walls[i].normal for i in other_indices])
+                
+                # ERROR ANTERIOR: projections = other_normals @ self.space.g_inv @ v
+                # CORRECCIÓN: Contracción directa Forma-Vector
+                projections = other_normals @ v
+                
+                tol = 1e-7 # Tolerancia un poco más laxa para flotantes
+                
+                if np.all(projections >= -tol):
+                    pass # v es correcto
+                elif np.all(projections <= tol):
+                    v = -v # -v es correcto
+                else:
+                    continue # El vértice viola algún muro -> No es parte del poliedro
+
+            # Si llegamos aquí, el vértice es geométricamente válido (pertenece al billar)
+            valid_vertex_found = True
+            
+            # --- CRITERIO DE FINITUD ---
+            # Calculamos la norma al cuadrado con la métrica: v . G . v
+            # Para esto SÍ usamos la métrica del espacio.
+            norm_sq = self.space.squared_norm(v, is_form=False)
+            
+            # Clasificación:
+            # < 0 : Time-like (Interior H^n) -> OK
+            # ~ 0 : Light-like (Borde Infinito) -> OK (Cúspide)
+            # > 0 : Space-like (Exterior) -> ULTRA-IDEAL -> VOLUMEN INFINITO
+            
+            if norm_sq > 1e-4: # Tolerancia positiva para descartar ruido numérico en cúspides
+                has_ultra_ideal = True
+                # Opcional: Break temprano si solo nos importa saber si falla
+                # break 
+        
+        if not valid_vertex_found:
+            return False
+            
+        # Si NO hay vértices ultra-ideales, el volumen está "tapado" y es finito.
+        return not has_ultra_ideal
     def find_all_corners(self):
         """
         Encuentra intersecciones de Muros (Corners/Cusps) independientemente de la finitud del volumen.

@@ -233,7 +233,7 @@ class SimulationCore():
         raw_walls = []
         grav_indices = range(self.spatial_dim)
         # 1. Symmetry Walls
-        if not params["Homogeneous Model"]:
+        if not params["Diagonal Model"]:
             if self.beta_dim <= 4:
                 for a, b in itertools.combinations(grav_indices, 2):
                     raw_walls.append(Wall(self.space, self.de_witt_space, self.symetry_plane, a, b))

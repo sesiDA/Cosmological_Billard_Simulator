@@ -1,13 +1,11 @@
 import numpy as np
 import tkinter as tk
 import tkinter.font as tkfont
-import textwrap
 import matplotlib.pyplot as plt
 import matplotlib.lines as mlines
 import matplotlib.patches as patches
 from matplotlib.animation import FuncAnimation
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
-from collections import deque
 
 class Graphic:
     """
@@ -78,7 +76,7 @@ class Graphic:
             cache_frame_data=False
         )
         self.legend_created = False
-    
+        self.canvas.mpl_connect('resize_event', self._on_resize)
     def pack(self):
         self.canvas.get_tk_widget().pack(side=tk.BOTTOM, fill=tk.BOTH, expand=True)
     
@@ -100,7 +98,8 @@ class Graphic:
         else:
             if lims[0]: self.ax.set_xlim(lims[0])
             if lims[1]: self.ax.set_ylim(lims[1])
-            self.ax.set_aspect('equal', adjustable='datalim')
+            # CAMBIO: 'box' mantiene el centro mejor que 'datalim' en redimensionados
+            self.ax.set_aspect('equal', adjustable='box')
     def _setup_billiard(self, data, wall_data, color, point_size, prob_data=None):
         # --- Lógica de Partícula (Existente) ---
         if not data is None:
@@ -293,8 +292,20 @@ class Graphic:
 
         if slice_def is not None:
             base, offset = slice_def
-            str_offset = self._format_vector(offset)
-            self.ax.set_title(f"Offset={str_offset}", fontsize=9)
+            u_vec, v_vec = base # Vectores directores del plano actual
+            
+            # Formateamos las direcciones para las etiquetas de los ejes
+            str_u = self._format_vector(u_vec, precision=1)
+            str_v = self._format_vector(v_vec, precision=1)
+            str_off = self._format_vector(offset, precision=1)
+
+            # Actualizamos labels de ejes dinámicamente
+            self.ax.set_xlabel(f"Dir {str_u}", fontsize=self.ax.xaxis.label.get_fontsize())
+            self.ax.set_ylabel(f"Dir {str_v}", fontsize=self.ax.yaxis.label.get_fontsize())
+            
+            # El título muestra el desplazamiento (Offset) respecto al origen
+            self.ax.set_title(f"Dynamic Slice (Offset: {str_off})", 
+                               fontsize=self.ax.title.get_fontsize())
     def _update_multiplot(self, data):
         if data is None or len(data) < 2 or len(data[0]) == 0: return
         times = np.array(data[0])
@@ -376,10 +387,38 @@ class Graphic:
         self.hopscotch_info_text.set_bbox(dict(facecolor='white', alpha=0.9, edgecolor='gray', boxstyle='round,pad=0.5'))
         self.hopscotch_info_text.set_fontsize(8)
     
-    def _format_vector(self, v):
-        try: return f"[{', '.join(f'{x:.2f}' for x in v)}]"
-        except: return str(v)
+    def _format_vector(self, v, precision=2):
+        """Formato compacto para vectores en etiquetas de ejes."""
+        try:
+            return "[" + ",".join(f"{x:.{precision}f}" for x in v) + "]"
+        except:
+            return str(v)
 
+    def _on_resize(self, event):
+        """Escala dinámicamente el tamaño de la letra basándose en el ancho."""
+        if event.width is None: return
+        
+        # Cálculo de tamaño proporcional (ajustado para ser un poco más grande)
+        base_size = max(8, event.width // 65) 
+        title_size = base_size + 3
+        
+        self.ax.title.set_fontsize(title_size)
+        self.ax.xaxis.label.set_fontsize(base_size)
+        self.ax.yaxis.label.set_fontsize(base_size)
+        self.ax.tick_params(axis='both', labelsize=base_size - 1)
+        
+        # --- NUEVA LÓGICA PARA LA LEYENDA ---
+        leg = self.ax.get_legend()
+        if leg:
+            # Ajustamos el tamaño de la fuente de la leyenda dinámicamente
+            for text in leg.get_texts():
+                text.set_fontsize(base_size)
+            # También el título de la leyenda si tuviera
+            leg.get_title().set_fontsize(base_size)
+        
+        # Si tienes el texto de Hopscotch (u+, u-), también lo escalamos
+        if hasattr(self, 'hopscotch_info_text'):
+            self.hopscotch_info_text.set_fontsize(base_size - 1)
     def set_time(self, new_time):
         self.current_frame = new_time
         self.trail_data_x = [] 
@@ -433,42 +472,47 @@ class GraphicDisplay(Graphic):
     # --- CORRECCIÓN 3: Gestión robusta de la leyenda al Amplificar/Desamplificar ---
     def set_amplify_state(self, is_maximized):
         self.is_amplified = is_maximized
-        
         if self.toolbar is None:
             self.toolbar = NavigationToolbar2Tk(self.canvas, self.frame)
-            self.toolbar.update()
             
         if is_maximized:
             self.btn_amplify.config(text="−")
             self.toolbar.pack(side=tk.BOTTOM, fill=tk.X)
             
-            # Mostrar Leyenda si hay datos
             if self.legend_handles:
-                # Convertimos valores del diccionario a lista
-                handles_list = list(self.legend_handles.values())
+                h_list = list(self.legend_handles.values())
                 
-                self.ax.legend(handles=handles_list, 
-                               loc='upper left', 
-                               bbox_to_anchor=(1.02, 1), 
-                               fontsize='small', 
-                               frameon=False,
-                               title="Legend")
-                self.fig.tight_layout(rect=[0, 0, 0.85, 1])
+                # Tamaño base para la leyenda ampliada
+                # Usamos 'medium' o un valor como 10-12 para que sea visible
+                if len(h_list) <= 4:
+                    self.ax.legend(handles=h_list, 
+                                   loc='best', 
+                                   frameon=True, 
+                                   shadow=True, 
+                                   edgecolor='black', 
+                                   facecolor='white',
+                                   fontsize='medium',  # <--- CAMBIADO de 'small' a 'medium'
+                                   title="Legend",
+                                   title_fontsize='medium') 
+                    self.fig.tight_layout()
+                else:
+                    # Si hay muchos (exponentes de Kasner), fuera pero con fuente legible
+                    self.ax.legend(handles=h_list, 
+                                   loc='upper left', 
+                                   bbox_to_anchor=(1.02, 1), 
+                                   frameon=True, 
+                                   fontsize='small') # Fuera puede ser un poco más pequeña
+                    self.fig.subplots_adjust(right=0.75)
         else:
+
             self.btn_amplify.config(text="□")
             self.toolbar.pack_forget()
-            
-            # Ocultar Leyenda explícitamente
             leg = self.ax.get_legend()
-            if leg:
-                leg.remove()
+            if leg: leg.remove()
+            self.fig.subplots_adjust(right=0.95, left=0.15, top=0.9, bottom=0.15)
+            self.fig.tight_layout()
             
-            self.fig.tight_layout(rect=[0, 0, 1, 1])
-            
-        self._internal_update(self.current_frame, force_update=True)
-        # Importante: forzar repintado inmediato para que se borre la leyenda
-        self.canvas.draw() 
-
+        self.canvas.draw_idle()
 # ... (Clase Form se mantiene igual) ...
 class Form():
     """A form is a combination of a text and an entry box or checkbox."""

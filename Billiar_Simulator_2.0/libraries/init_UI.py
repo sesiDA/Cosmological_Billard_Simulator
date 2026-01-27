@@ -7,127 +7,131 @@ class init_UI():
 
     """Initialization window of the simulation program."""
 
-    def __init__(self,title):
-        #Sets window and configurates it
-        self.w,self.h=700,500
+    def __init__(self, title):
+        # Sets window and configurates it
+        self.w, self.h = 700, 520 # Aumentado ligeramente para el desplegable sin apretar el resto
         
-        #Sets internal state variables
-        self.closed=False
+        # Sets internal state variables
+        self.closed = False
         self.dilaton_exp_visible = None
         self.coupling_lst_visible = None
         self.pforms_lst_visible = None
         self.form_dilaton_check = None
         self.form_pforms_check = None
         
-        u = 1/np.pi # approx 0.3183
-        p1=1/np.pi
-        p2=1/np.e
-        def get_kasner_param_3d(u):
-            
-            denom = 1 + u + u**2
-            p1 = -u / denom
-            p2 = (1 + u) / denom
-            p3 = (u * (1 + u)) / denom
-            return [p1,p2,p3]
-            
-        def get_kasner_param_4d(p1,p2):
-            sum_remaining = 1.0 - (p1 + p2)
-            sq_sum_remaining = 1.0 - (p1**2 + p2**2)
-            a = 2.0
-            b = -2.0 * sum_remaining
-            c = sum_remaining**2 - sq_sum_remaining
-            discriminante = b**2 - 4*a*c
-            sqrt_disc = np.sqrt(discriminante)
-            p3 = (-b + sqrt_disc) / (2*a)
-            p4 = (-b - sqrt_disc) / (2*a)
-            return [p1,p2,p3,p4]
-        vect10D=[1,0,0,0,0,0,0,0,0,0,0]
-        # Ordenamos para mantener consistencia con la cámara de Weyl estándar (p1 < p2 < p3)
-        # Aunque la fórmula de u ya suele dar p1 negativo.
-        vals =sorted(get_kasner_param_3d(u))
-        #vals=vect10D
-        #vals=[0,1]
-        self.parameters={"Initial Kasner Exp":vals,
-                         "Initial Beta Pos":[10,11,12,13,14,15,16,17,18],
-                         "Initial Time":0.0,
-                         "Time Speed":1.0,
-                         "Dilaton":False,
-                         "Kasner Dilaton Exp":0.0,
-                         "Coupling Constants":[2,2],
-                         "P-Forms":False,
-                         "P-Form List":[1,2],
-                         "Homogeneous Model": False}
-        self.type_to_functions={"<class 'int'>":    lambda x:int(x),
-                                "<class 'float'>":  lambda x:float(eval(str(x))),
-                                "<class 'list'>":   lambda x:eval(x),
-                                "<class 'complex'>":lambda x:complex(x),
-                                "<class 'set'>":    lambda x:set(x),
-                                "<class 'bool'>":   lambda x:bool(x),
-                                "<class 'str'":     lambda x:str(x)}
-        #Creates window
+        # --- LÓGICA DE PARAMETRIZACIÓN INICIAL ---
+        self.param_options = ["Raw Kasner initial velocity", "u parametrization"]
+        
+        vals = [1,0,0]
+
+        self.parameters = {
+            "Initial Kasner Exp": vals,
+            "Initial Beta Pos": [10, 11, 12],
+            "Initial Time": 0.0,
+            "Time Speed": 1.0,
+            "Dilaton": False,
+            "Kasner Dilaton Exp": 0.0,
+            "Coupling Constants": [2, 2],
+            "P-Forms": False,
+            "P-Form List": [1, 2],
+            "Diagonal Model": False
+        }
+
+        self.type_to_functions = {
+            "<class 'int'>":    lambda x: int(x),
+            "<class 'float'>":  lambda x: float(eval(str(x))),
+            "<class 'list'>":   lambda x: eval(x),
+            "<class 'complex'>": lambda x: complex(x),
+            "<class 'set'>":    lambda x: set(x),
+            "<class 'bool'>":   lambda x: bool(x),
+            "<class 'str'>":    lambda x: str(x)
+        }
+
+        # Creates window
         self.root = tk.Tk()
         self.root.title(title)
         self.root.resizable(False, False)
         self.root.geometry(f"{self.w}x{self.h}") 
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
 
-        #Text Frame
+        # Text Frame
         txt_frame = tk.Frame(self.root, width=self.w, height=self.h/5)
-        txt_frame.pack(side="top", fill="x", pady=10)
+        txt_frame.pack(side="top", fill="x", pady=(10, 0))
         
-        #Title
-        title = tk.Label(txt_frame, text="Simulation Initialization", font=("Arial", 18))
-        title.pack(anchor="center")
+        title_label = tk.Label(txt_frame, text="Simulation Initialization", font=("Arial", 18))
+        title_label.pack(anchor="center")
         
-        #Error text
-        self.error_msg=tk.Label(txt_frame, text="", font=("Arial", 8),fg="red")
+        self.error_msg = tk.Label(txt_frame, text="", font=("Arial", 8), fg="red")
         self.error_msg.pack()
 
-        #Form Frame
+        # --- NUEVO: DROPDOWN DE PARAMETRIZACIÓN ---
+        # Lo ponemos justo antes de los formularios para que sea lo primero que se vea
+        mode_frame = tk.Frame(self.root)
+        mode_frame.pack(side="top", fill="x", padx=30, pady=10)
+        
+        # Usamos un frame interno centrado
+        mode_inner = tk.Frame(mode_frame)
+        mode_inner.pack(anchor="center") # Centra el bloque entero
+        
+        tk.Label(mode_inner, text="Parametrization mode:", font=("Arial", 9, "bold")).pack(side="left")
+        self.param_var = tk.StringVar(value=self.param_options[0])
+        self.mode_menu = tk.OptionMenu(mode_inner, self.param_var, *self.param_options, command=self.update_kasner_label)
+        self.mode_menu.config(width=25, font=("Arial", 8))
+        self.mode_menu.pack(side="left", padx=10)
+
+        # Form Frame
         form_frame = tk.Frame(self.root, width=self.w, height=3*self.h/5)
         form_frame.pack(side="top", fill="both", expand=True, padx=20, pady=5)
-        #Configures Form frame disposition
+
+        form_frame.grid_rowconfigure(0, weight=1) # <--- AÑADE ESTO para expansión vertical
         form_frame.grid_columnconfigure(0, weight=1, uniform="group1")
         form_frame.grid_columnconfigure(1, weight=0) 
         form_frame.grid_columnconfigure(2, weight=1, uniform="group1")
         
-        #Form elements
-        num_frame=tk.Frame(form_frame, width=self.w/2, height=3*self.h/5)
+        num_frame = tk.Frame(form_frame) # Quita el width fijo, deja que el grid lo maneje
         num_frame.grid(row=0, column=0, sticky="nsew")
-        sep_line = tk.Frame(form_frame, bg="gray",width=1, height=3*self.h/5)
+        num_frame.grid_columnconfigure(0, weight=1) # <--- AÑADE ESTO
+
+        sep_line = tk.Frame(form_frame, bg="gray", width=1)
         sep_line.grid(row=0, column=1, sticky="ns", pady=10)
-        bool_frame=tk.Frame(form_frame, width=self.w/2, height=3*self.h/5)
+
+        bool_frame = tk.Frame(form_frame) # Quita el width fijo
         bool_frame.grid(row=0, column=2, sticky="nsew")
+        bool_frame.grid_columnconfigure(0, weight=1)
         
-        #Creates all forms
-        self.num_type=[]
-        self.bool_type=[]
-        keys_to_exclude=["Kasner Dilaton Exp", "Coupling Constants", "P-Form List"]
-        parameters_type=[]
+        # Logic to separate types (Conservative with your original loop)
+        self.num_type = []
+        self.bool_type = []
+        keys_to_exclude = ["Kasner Dilaton Exp", "Coupling Constants", "P-Form List"]
+        parameters_type = []
+
         for key in self.parameters.keys():
             parameters_type.append(type(self.parameters[key]))
-            if key == "Homogeneous Model": 
-                continue
-            if key=="Initial Kasner Exp":
-                self.parameters[key]=f"{vals}"
+            if key == "Diagonal Model": continue
+            if key == "Initial Kasner Exp":
+                self.parameters[key] = f"{vals}"
+            
             if (key in keys_to_exclude) or isinstance(self.parameters[key], bool):
-                self.bool_type.append([key,str(self.parameters[key])])
+                self.bool_type.append([key, str(self.parameters[key])])
             else:
-                self.num_type.append([key,str(self.parameters[key])])
-        self.parameters_type=parameters_type
-        self.forms={}
+                self.num_type.append([key, str(self.parameters[key])])
+        
+        self.parameters_type = parameters_type
+        self.forms = {}
+
+        # Creates numeric forms
         for i, (key, value) in enumerate(self.num_type):
             num_frame.grid_rowconfigure(i, weight=1)
-            
             f = Form(num_frame, "·" + key + " =", value)
             f.grid(row=i, column=0, sticky="ew", padx=10)
-            self.forms[key]=f
+            self.forms[key] = f
 
-        bool_frame.grid_rowconfigure(0, weight=0) # El título no necesita estirarse tanto
+        # Creates boolean forms
+        bool_frame.grid_rowconfigure(0, weight=0)
         matter_title = tk.Label(bool_frame, text="Matter Content:", font=("Arial", 12, "bold"))
-        matter_title.grid(row=0, column=0, sticky="w", padx=15 ,pady=(0, 10))
+        matter_title.grid(row=0, column=0, sticky="w", padx=15, pady=(0, 10))
         
-        for i,(key, value) in enumerate(self.bool_type):
+        for i, (key, value) in enumerate(self.bool_type):
             row_idx = i + 1
             bool_frame.grid_rowconfigure(row_idx, weight=1)
             if not key in keys_to_exclude:
@@ -136,20 +140,122 @@ class init_UI():
                 f.checkbox.config(command=self.update_dynamic_fields)
             else:
                 f = Form(bool_frame, "  ·" + key + ":", value)
-            self.forms[key]=f
+            self.forms[key] = f
         
-        #Start Button Frame
+        # --- NUEVO: START Y LOAD BUTTONS ---
         btn_frame = tk.Frame(self.root, width=self.w, height=self.h/5)
-        btn_frame.pack()
-        #Start Button 
-        f_homo = Form(btn_frame, "Homogeneous Model", entry_type="bool")
-        f_homo.pack(side="top", pady=(5, 5))
-        self.forms["Homogeneous Model"] = f_homo
+        btn_frame.pack(side="bottom", pady=(0, 15))
         
-        start_button = tk.Button(btn_frame, text="Start", font=("Arial", 14),command=self.form_is_correct)
-        start_button.pack(side="top", pady=(0, 10))
+        f_homo = Form(btn_frame, "Diagonal metric", entry_type="bool")
+        f_homo.pack(side="top", pady=(5, 5))
+        self.forms["Diagonal Model"] = f_homo
+        
+        # Frame interno para poner botones al lado
+        inner_btn_frame = tk.Frame(btn_frame)
+        inner_btn_frame.pack(side="top")
+
+        start_button = tk.Button(inner_btn_frame, text="Start", font=("Arial", 14), width=10, command=self.form_is_correct)
+        start_button.pack(side="left", padx=5)
+
+        load_button = tk.Button(inner_btn_frame, text="Load Simulation", font=("Arial", 14), width=15, command=self.load_simulation)
+        load_button.pack(side="left", padx=5)
 
         self.root.mainloop()
+
+    # --- NUEVAS FUNCIONES DE LÓGICA ---
+    def get_kasner_from_u(self, u_val, dim=3):
+        """Implementación robusta de u -> Kasner."""
+        if isinstance(u_val, (list, np.ndarray)):
+            u_arr = np.array(u_val)
+            p = np.zeros(len(u_arr) + 2)
+            p[:-2] = u_arr
+            rem_sum = 1.0 - np.sum(u_arr)
+            rem_sq = 1.0 - np.sum(u_arr**2)
+            a, b, c = 2.0, -2.0*rem_sum, rem_sum**2 - rem_sq
+            disc = max(0, b**2 - 4*a*c) # max para evitar errores de precisión
+            p[-2] = (-b + np.sqrt(disc)) / 2.0
+            p[-1] = (-b - np.sqrt(disc)) / 2.0
+            return [round(x, 6) for x in p]
+        else:
+            # Caso 3D estándar (Lifshitz)
+            u = float(u_val)
+            denom = 1 + u + u**2
+            p = [-u/denom, (1+u)/denom, (u*(1+u))/denom]
+            return [round(x, 6) for x in p]
+    def get_u_from_kasner(self, p_vals):
+        """Convierte exponentes p_i a u (escalar o lista)."""
+        # Filtramos ceros absolutos para evitar divisiones por cero
+        p = np.sort([float(x) for x in p_vals])
+        
+        if len(p) == 3:
+            # p1 <= p2 <= p3. La relación estándar es p1 = -u/R, p2 = (1+u)/R, p3 = u(1+u)/R
+            # Por tanto: u = p3 / p2. 
+            # Si p2 es 0 (caso [1,0,0]), u tiende a infinito o es un estado de vacío.
+            if abs(p[1]) < 1e-7: 
+                return 1.0 if abs(p[2]) < 1e-7 else 100.0 # u grande para aproximar p2->0
+            u = p[2] / p[1]
+            return round(abs(u), 5)
+        else:
+            # Para N-D devolvemos los componentes independientes
+            return [round(x, 5) for x in p[:-2]]
+    def update_kasner_label(self, selection):
+        """Cambia el texto y realiza la conversión inmediata si es posible."""
+        try:
+            raw_content = self.forms["Initial Kasner Exp"].get().strip()
+            if not raw_content: return
+            
+            val = eval(raw_content)
+            # Detectar dimensión necesaria
+            try:
+                beta_raw = self.forms["Initial Beta Pos"].get()
+                dim = len(eval(beta_raw)) - (1 if self.forms["Dilaton"].get() else 0)
+            except: dim = 3
+
+            if selection == "u parametrization":
+                self.forms["Initial Kasner Exp"].label.config(text="·Initial u=")
+                if isinstance(val, list): # Evita re-convertir si ya es u
+                    new_val = self.get_u_from_kasner(val)
+                    self.forms["Initial Kasner Exp"].entry.delete(0, tk.END)
+                    self.forms["Initial Kasner Exp"].entry.insert(0, str(new_val))
+            else:
+                self.forms["Initial Kasner Exp"].label.config(text="·Initial Kasner Exp =")
+                if not isinstance(val, list) or len(val) < dim:
+                    new_val = self.get_kasner_from_u(val, dim)
+                    self.forms["Initial Kasner Exp"].entry.delete(0, tk.END)
+                    self.forms["Initial Kasner Exp"].entry.insert(0, str(new_val))
+        except Exception as e:
+            print(f"Aviso: Entrada no convertible momentáneamente ({e})")
+    def load_simulation(self):
+        """Placeholder para la función de carga."""
+        print("Load simulation triggered")
+        pass
+
+    def get_kasner_from_u(self, u_input, dim=3):
+        """Convierte u (escalar o lista) a exponentes p_i de dimensión dim."""
+        try:
+            if isinstance(u_input, (float, int)):
+                # Caso 3D estándar (Lifshitz)
+                u = float(u_input)
+                denom = 1 + u + u**2
+                return [round(-u/denom, 6), round((1+u)/denom, 6), round((u*(1+u))/denom, 6)]
+            else:
+                # Caso N-Dimensional
+                u_arr = np.array(u_input)
+                p = np.zeros(len(u_arr) + 2)
+                p[:-2] = u_arr
+                rem_sum = 1.0 - np.sum(u_arr)
+                rem_sq = 1.0 - np.sum(u_arr**2)
+                
+                # Ecuación: p1 + p2 = rem_sum | p1^2 + p2^2 = rem_sq
+                a, b, c = 2.0, -2.0 * rem_sum, rem_sum**2 - rem_sq
+                disc = max(0, b**2 - 4*a*c) # Blindaje contra complejos
+                
+                p[-2] = (-b + np.sqrt(disc)) / 2.0
+                p[-1] = (-b - np.sqrt(disc)) / 2.0
+                return [round(x, 6) for x in p]
+        except Exception as e:
+            print(f"Error interno en get_kasner_from_u: {e}")
+            return [1.0] + [0.0]*(dim-1) # Fallback seguro (Kasner puro)
     def update_dynamic_fields(self):
         """Shows or ocults p-forms forms and dilaton forms."""
         is_dilaton = self.forms["Dilaton"].get()
@@ -168,27 +274,35 @@ class init_UI():
         else:
             self.forms["Coupling Constants"].grid_remove()
     def extract_parameters(self):
+        """Asegura que los parámetros salgan de la UI siempre como Kasner (list)."""
+        is_u_mode = self.param_var.get() == "u parametrization"
         
-        """Returns parameters of the window in its correct format"""
-        
-        #Processes to right format all elements
-        for i, key in enumerate(self.parameters.keys()):
-            converter = self.type_to_functions[ str(self.parameters_type[i])]
-            self.parameters[key] = converter(self.forms[key].get())
+        # Primero calculamos la dimensión espacial necesaria para la conversión
+        try:
+            beta_val = eval(self.forms["Initial Beta Pos"].get())
+            # La dimensión de Kasner es la de Beta menos 1 si hay dilatón
+            dim_spatial = len(beta_val) - (1 if self.forms["Dilaton"].get() else 0)
+        except:
+            dim_spatial = 3 # Fallback por seguridad
 
-        #Matter integration logic (post-processing)
+        for i, key in enumerate(self.parameters.keys()):
+            val_raw = self.forms[key].get()
+            
+            if key == "Initial Kasner Exp" and is_u_mode:
+                # TRADUCCIÓN CRÍTICA: Convertimos u a la lista de exponentes p_i
+                u_data = eval(val_raw)
+                self.parameters[key] = self.get_kasner_from_u(u_data, dim_spatial)
+            else:
+                # Conversión estándar para el resto de parámetros
+                converter = self.type_to_functions[str(self.parameters_type[i])]
+                self.parameters[key] = converter(val_raw)
+
+        # Lógica de Dilatón (Post-procesamiento original)
         if self.parameters["Dilaton"]:
-            # if there is matter one has to change kasner velocity[p1, p2, ..., p_phi]
             spatial_kasner = self.parameters["Initial Kasner Exp"]
             phi_exp = self.parameters["Kasner Dilaton Exp"]
-            
-            #Adds dilaton
-            if isinstance(spatial_kasner, list):
-                spatial_kasner.append(phi_exp)
-            else:
-                spatial_kasner = list(spatial_kasner) + [phi_exp]
-            #Rewrites original parameter
-            self.parameters["Initial Kasner Exp"] = spatial_kasner
+            # Nos aseguramos de concatenar correctamente para que sea una lista plana
+            self.parameters["Initial Kasner Exp"] = list(spatial_kasner) + [phi_exp]
     def _validate_position_against_walls(self, beta, spatial_dim, is_dilaton, p_forms_on):
         """
         Verifica si la posición 'beta' cumple las desigualdades de todos los muros activos.
@@ -259,17 +373,22 @@ class init_UI():
         """Checks if init form is correct."""
     
         incorrect_message=""
+        is_u_mode = self.param_var.get() == "u parametrization"
         for i, expected_type in enumerate(self.parameters_type):
             key_name = list(self.parameters.keys())[i]
             param_value = list(self.forms.values())[i].get()
             
             #Looks at the format 
             try:
-                type_key = str(expected_type) # "<class 'list'>", etc.
-                converter = self.type_to_functions[type_key]
-                converted_val = converter(param_value)
-                if expected_type == list and not isinstance(converted_val, list): #Extra evaluation for tuples without []
-                    converted_val = list(converted_val)
+                if key_name == "Initial Kasner Exp" and is_u_mode:
+                    u_val = eval(param_value)
+                    converted_val = self.get_kasner_from_u(u_val)
+                else:
+                    type_key = str(expected_type) # "<class 'list'>", etc.
+                    converter = self.type_to_functions[type_key]
+                    converted_val = converter(param_value)
+                    if expected_type == list and not isinstance(converted_val, list): #Extra evaluation for tuples without []
+                        converted_val = list(converted_val)
                     
             except Exception:
                 incorrect_message = f"Error in '{key_name}': Invalid format for {expected_type.__name__}"
@@ -299,7 +418,12 @@ class init_UI():
                     # --- Preparación de Datos ---
                     try:
                         kasner_raw = self.forms["Initial Kasner Exp"].get()
-                        kasner_dim = len(list(eval(kasner_raw))) # Dimensión espacial
+                        is_u_mode = self.param_var.get() == "u parametrization"
+                        if is_u_mode:
+                            u_eval = eval(kasner_raw)
+                            kasner_dim = 3 if isinstance(u_eval, (int, float)) else len(u_eval) + 2
+                        else:
+                            kasner_dim = len(list(eval(kasner_raw)))
                         is_dilaton = self.forms["Dilaton"].get()
                         is_pforms = self.forms["P-Forms"].get()
                         
@@ -313,17 +437,9 @@ class init_UI():
                         incorrect_message = f"Beta Pos dimension mismatch. Expected {expected_dim} (Space + Dilaton)."
                     
                     # 2. Chequeo Timelike (Métrica de DeWitt)
-                    # Sum(b^2) - (Sum(b))^2 < 0. Esto sigue siendo necesario para que exista proyección hiperbólica.
-                    # IMPORTANTE: Calcula esto con la métrica SIN normalización extra primero, o usa la fórmula genérica.
-                    # La fórmula genérica para G_ij = delta - 1 es: sum(x^2) - sum(x)^2.
-                    # Si tienes dilaton, la métrica es diferente. 
-                    # Para simplificar, usamos la condición Lorentziana básica del espacio de configuración.
                     else:
-                        # Calculamos métrica aproximada para validar Lorentziano
                         sq_norm = np.sum(beta**2)
                         if is_dilaton:
-                            # Asumimos que el input está normalizado para G_phi=1 o 2
-                            # Si no estamos seguros, relajamos este check o usamos una cota laxa
                             sq_norm_grav = np.sum(beta[:-1]**2)
                             linear_grav = np.sum(beta[:-1])**2
                             # Check gravitatorio parcial

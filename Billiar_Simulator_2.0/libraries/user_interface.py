@@ -1,4 +1,3 @@
-import textwrap
 import numpy as np
 import tkinter as tk
 import tkinter.font as tkfont
@@ -146,15 +145,17 @@ class SimConfig():
                      "---", # Visual separators
                      "Change Position", 
                      "Change Velocity",
-                     "Change Matter Content"],
+                     "Change Matter Content",
+                     "Set/Unset symetry walls"],
             "Export": ["Export Simulation data (.csv, .txt)", 
-                       "Export frame image (.png, .jpg, .bmp)", 
                        "Export video (.mp4)"],
-            "Simulate": ["Caos Simulation"],
             "View": ["View SimInfo pannel",
                      "View Spacial curvature",
                      "View particle stela",
-                     "View Weyl Chamber zone"]}
+                     "View Weyl Chamber zone",
+                     "View all walls/just dominant"
+                     "View probability density in slice"
+                     "Change slice plane recalibration at bounce"]}
         
         #Menu objects
         self.menubuttons = []
@@ -456,31 +457,57 @@ class SimulationMattres():
             
             self.redraw_grid()
     def redraw_grid(self):
-        """Redraws graphics into the graphic grid."""
-        #Sets every graph to non visible
+        """Redibuja la rejilla manteniendo proporción 4:3 en miniaturas."""
+        # 1. Limpieza de configuraciones previas
+        for i in range(10):
+            self.scrollable_frame.grid_columnconfigure(i, weight=0, uniform="")
+            self.scrollable_frame.grid_rowconfigure(i, weight=0, uniform="")
+
         for gd in self.graphic_displays:
             gd.frame.grid_forget()
             gd.frame.pack_forget()
 
-        #If there is one that is amplified draws just this one
+        canvas_width = self.canvas.winfo_width()
+        canvas_height = self.canvas.winfo_height()
+
         if self.amplified_graphic:
-            self.amplified_graphic.frame.pack(fill="both", expand=True)
+            # MODO AMPLIADO: Ocupa todo el espacio disponible
+            self.scrollable_frame.grid_columnconfigure(0, weight=1)
+            self.scrollable_frame.grid_rowconfigure(0, weight=1)
+            
+            # Permitimos que el frame se expanda libremente
+            self.amplified_graphic.frame.config(width=canvas_width, height=canvas_height)
+            self.amplified_graphic.frame.grid_propagate(True) 
+            
+            self.amplified_graphic.frame.grid(row=0, column=0, sticky="nsew")
+            self.canvas.itemconfig(self.canvas_frame_id, width=canvas_width, height=canvas_height)
             self.canvas.yview_moveto(0)
         else:
-            #Elsewhere draws graphic as usual
+            # MODO REJILLA: Proporción 4:3 estricta
             n_per_row = 3
+            # Calculamos el ancho de cada celda restando márgenes (aprox 20px por gráfico)
+            gd_width = (canvas_width - 60) // n_per_row
+            gd_height = int(gd_width * 0.75) # 4:3 -> Alto es 3/4 del ancho
+
             for i, gd in enumerate(self.graphic_displays):
                 row = i // n_per_row
                 col = i % n_per_row
-                gd.grid(row=row, column=col, padx=10, pady=10, sticky="new")
-        self.canvas.update_idletasks()
-        
-        #Creates an event that configures new canvas dimensions and scrollable regions
-        event = tk.Event()
-        event.width = self.canvas.winfo_width()
-        event.height = self.canvas.winfo_height()
-        self._on_canvas_configure(event)
-        self.canvas.configure(scrollregion=self.canvas.bbox("all"))  
+                
+                # Forzamos el tamaño del frame para que sea una "minipantalla"
+                gd.frame.config(width=gd_width, height=gd_height)
+                gd.frame.grid_propagate(False) # <--- CRÍTICO: Mantiene el tamaño 4:3
+                
+                # Usamos sticky="nw" para que no se estire si la celda es más grande
+                gd.frame.grid(row=row, column=col, padx=10, pady=10, sticky="nw")
+                
+                # Solo damos peso a las columnas para que se repartan el ancho
+                self.scrollable_frame.grid_columnconfigure(col, weight=1, uniform="cols")
+                # Las filas se quedan con peso 0 para no estirarse hacia abajo
+            
+            self.canvas.itemconfig(self.canvas_frame_id, width=canvas_width)
+
+        self.scrollable_frame.update_idletasks()
+        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
     def remove_graphic(self, target_graphic):
         """Function that's called in graphic target_graphic to close it"""
         
